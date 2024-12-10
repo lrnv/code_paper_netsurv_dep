@@ -1,1 +1,1 @@
-# code_paper_netsurv_dep
+This repo contains code for the paper "Non-parametric estimation of net survival under dependence between death causes", soon to appear.
