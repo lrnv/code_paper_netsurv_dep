@@ -89,18 +89,18 @@ const unicode_cop_names = ["Frank(-0.3)", "Clayton(-0.3)", "Indep.", "Frank(0.3)
 function plot_a_cop(U,title)
     return scatter(U[1,:],U[2,:],
         label=:none, ms=1, axes=:none, dpi=600, bottom_margin=0mm,  left_margin = 0mm, 
-        right_margin = 0mm,  top_margin = 0mm, axis=nothing, ticks=nothing, title=title
+        right_margin = 0mm,  top_margin = 0mm, axis=nothing, ticks=nothing, xlabel=title, guidefontsize=12
     )
 end
 if program[:plot_copulas]
-    p = plot(plot_a_cop.(rand.(cops,5000),unicode_cop_names)...,layout=grid(1,5),size=[1380,304])
+    p = plot(plot_a_cop.(rand.(cops,5000),unicode_cop_names)...,layout=grid(1,5),size=[1380,304], bottommargin=10Plots.mm )
     savefig(p,"$(program[:out_folder])/cops/showoff_cops.pdf")
     savefig(p,"$(program[:out_folder])/cops/showoff_cops.png")
 
     # A second plot. 
     other_cops = [clay(0.9), frank(0.9), gumb(0.9)]
     other_titles = ["(a) : Clayton Copula", "(b) : Frank Copula", "(c) : Gumbel Copula"]
-    p = plot(plot_a_cop.(rand.(other_cops,5000),other_titles)...,layout=grid(1,3),size=[1350,440])
+    p = plot(plot_a_cop.(rand.(other_cops,5000),other_titles)...,layout=grid(1,3),size=[1350,440], bottommargin=10Plots.mm )
     savefig(p,"$(program[:out_folder])/cops/example_archimedeans.pdf")
     savefig(p,"$(program[:out_folder])/cops/example_archimedeans.png")
 end
@@ -528,17 +528,17 @@ if program[:analyse_example]
     function mkshortplot(models, side, cop, τs)
         t = 0:0.1:T_FINAL
         m = models[(side,cop,τs[1])]
-        plt = plot(t, m.(t .* 365.241), label="τ=$(τs[1])", legend = :inline)
+        plt = plot(t, m.(t .* 365.241), label="τ=$(τs[1])", legend = :inline, ylims=(0.2,1))
         for i in 2:length(τs)
             m = models[(side,cop,τs[i])]
             plot!(plt, t, m.(t .* 365.241), label="τ=$(τs[i])", legend = :inline)
         end
         return plt
     end
-    function mkshortvarplot(models, side, cop, τs)
+    function mkshortvarplot(models, side, cop)
         t = 0:0.1:T_FINAL
         m = models[(side,cop,τs[1])]
-        plt = plot(t, sqrt.(variance.(Ref(m), t .* 365.241)), label="τ=$(τs[1])", legend = :inline)
+        plt = plot(t, sqrt.(variance.(Ref(m), t .* 365.241)), label="τ=$(τs[1])", legend = :inline, ylims=(0,0.18))
         for i in 2:length(τs)
             m = models[(side,cop,τs[i])]
             plot!(plt, t, sqrt.(variance.(Ref(m), t .* 365.241)), label="τ=$(τs[i])", legend = :inline)
@@ -546,19 +546,19 @@ if program[:analyse_example]
         return plt
     end
 
-    f_pl = plot(mkshortplot(models, :left,  :frank,   τ_frank),   title="Frank Copulas - Left side")
-    f_pr = plot(mkshortplot(models, :right, :frank,   τ_frank),   title="Frank Copulas - Right side")
-    c_pl = plot(mkshortplot(models, :left,  :clayton, τ_clayton), title="Clayton Copulas - Left side")
-    c_pr = plot(mkshortplot(models, :right, :clayton, τ_clayton), title="Clayton Copulas - Right side")
-    allp = plot(f_pl, f_pr, c_pl, c_pr,layout=(2,2),size=(1200,650))
+    f_pl = plot(mkshortplot(models, :left,  :frank,   τ_frank), ylabel="C: Frank(τ)")
+    f_pr = plot(mkshortplot(models, :right, :frank,   τ_frank))
+    c_pl = plot(mkshortplot(models, :left,  :clayton, τ_clayton), ylabel="C: Clayton(τ)", xlabel="Primary tumor location: left")
+    c_pr = plot(mkshortplot(models, :right, :clayton, τ_clayton), xlabel="Primary tumor location: right")
+    allp = plot(f_pl, f_pr, c_pl, c_pr,layout=(2,2),size=(1200,650), legend=false, leftmargin=5Plots.mm, bottommargin=5Plots.mm, guidefontsize = 12)
     Plots.savefig(allp,"$(program[:out_folder])/example/short_paper_graph.pdf")
     Plots.savefig(allp,"$(program[:out_folder])/example/short_paper_graph.png")
 
-    f_pl = plot(mkshortvarplot(models, :left,  :frank,   τ_frank),   title="Frank Copulas - Left side")
-    f_pr = plot(mkshortvarplot(models, :right, :frank,   τ_frank),   title="Frank Copulas - Right side")
-    c_pl = plot(mkshortvarplot(models, :left,  :clayton, τ_clayton), title="Clayton Copulas - Left side")
-    c_pr = plot(mkshortvarplot(models, :right, :clayton, τ_clayton), title="Clayton Copulas - Right side")
-    allp = plot(f_pl, f_pr, c_pl, c_pr,layout=(2,2),size=(1200,650))
+    f_pl = plot(mkshortvarplot(models, :left,  :frank,   τ_frank), ylabel="C: Frank(τ)")
+    f_pr = plot(mkshortvarplot(models, :right, :frank,   τ_frank))
+    c_pl = plot(mkshortvarplot(models, :left,  :clayton, τ_clayton), ylabel="C: Clayton(τ)", xlabel="Primary tumor location: left")
+    c_pr = plot(mkshortvarplot(models, :right, :clayton, τ_clayton), xlabel="Primary tumor location: right")
+    allp = plot(f_pl, f_pr, c_pl, c_pr,layout=(2,2),size=(1200,650), legend=false, leftmargin=5Plots.mm, bottommargin=5Plots.mm, guidefontsize = 12)
     Plots.savefig(allp,"$(program[:out_folder])/example/short_paper_graph_var.pdf")
     Plots.savefig(allp,"$(program[:out_folder])/example/short_paper_graph_var.png")
 end
