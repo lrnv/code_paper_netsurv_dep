@@ -616,12 +616,12 @@ if program[:analyse_test_on_example]
     clay_test = mk_example_test.(Ref(df),Ref(survexp_fr),clay.(τ_clayton))
     clay_pvals = DataFrame(pvalue.(clay_test, Ts'), times)
     insertcols!(clay_pvals, 1, :τ => τ_clayton)
-    save_table(clay_pvals, "$(program[:out_folder])/example/tests_pvalues_clayton.tex"; rounding=ft_printf("%.5f"), alignment = [:l,:Y,:Y,:Y,:Y,:Y])
+    save_table(clay_pvals, "$(program[:out_folder])/example/tests_pvalues_clayton.tex"; rounding=ft_printf("%.5f"), alignment = [:r,:Y,:Y,:Y,:Y,:Y])
 
     # Franks 
     τ_frank = -0.6:0.1:0.6
     frank_test = mk_example_test.(Ref(df),Ref(survexp_fr),frank.(τ_frank))
     frank_pvals = DataFrame(pvalue.(frank_test, Ts'), times)
     insertcols!(frank_pvals, 1, :τ => τ_frank)
-    save_table(frank_pvals, "$(program[:out_folder])/example/tests_pvalues_frank.tex"; rounding=ft_printf("%.5f"), alignment = [:l,:Y,:Y,:Y,:Y,:Y])
+    save_table(frank_pvals, "$(program[:out_folder])/example/tests_pvalues_frank.tex"; rounding=ft_printf("%.5f"), alignment = [:r,:Y,:Y,:Y,:Y,:Y])
 end
