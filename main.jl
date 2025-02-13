@@ -535,7 +535,7 @@ if program[:analyse_example]
         end
         return plt
     end
-    function mkshortvarplot(models, side, cop)
+    function mkshortvarplot(models, side, cop, τs)
         t = 0:0.1:T_FINAL
         m = models[(side,cop,τs[1])]
         plt = plot(t, sqrt.(variance.(Ref(m), t .* 365.241)), label="τ=$(τs[1])", legend = :inline, ylims=(0,0.18))
@@ -550,7 +550,7 @@ if program[:analyse_example]
     f_pr = plot(mkshortplot(models, :right, :frank,   τ_frank))
     c_pl = plot(mkshortplot(models, :left,  :clayton, τ_clayton), ylabel="C: Clayton(τ)", xlabel="Primary tumor location: left")
     c_pr = plot(mkshortplot(models, :right, :clayton, τ_clayton), xlabel="Primary tumor location: right")
-    allp = plot(f_pl, f_pr, c_pl, c_pr,layout=(2,2),size=(1200,650), legend=false, leftmargin=5Plots.mm, bottommargin=5Plots.mm, guidefontsize = 12)
+    allp = plot(f_pl, f_pr, c_pl, c_pr,layout=(2,2),size=(1200,650), leftmargin=5Plots.mm, bottommargin=5Plots.mm, guidefontsize = 12)
     Plots.savefig(allp,"$(program[:out_folder])/example/short_paper_graph.pdf")
     Plots.savefig(allp,"$(program[:out_folder])/example/short_paper_graph.png")
 
@@ -558,7 +558,7 @@ if program[:analyse_example]
     f_pr = plot(mkshortvarplot(models, :right, :frank,   τ_frank))
     c_pl = plot(mkshortvarplot(models, :left,  :clayton, τ_clayton), ylabel="C: Clayton(τ)", xlabel="Primary tumor location: left")
     c_pr = plot(mkshortvarplot(models, :right, :clayton, τ_clayton), xlabel="Primary tumor location: right")
-    allp = plot(f_pl, f_pr, c_pl, c_pr,layout=(2,2),size=(1200,650), legend=false, leftmargin=5Plots.mm, bottommargin=5Plots.mm, guidefontsize = 12)
+    allp = plot(f_pl, f_pr, c_pl, c_pr,layout=(2,2),size=(1200,650), leftmargin=5Plots.mm, bottommargin=5Plots.mm, guidefontsize = 12)
     Plots.savefig(allp,"$(program[:out_folder])/example/short_paper_graph_var.pdf")
     Plots.savefig(allp,"$(program[:out_folder])/example/short_paper_graph_var.png")
 end
