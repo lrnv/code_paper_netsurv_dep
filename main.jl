@@ -17,6 +17,10 @@ program = Dict(
     :n => 500, # Size of the samples
     :N_boot => 1000,
 
+    ## Burn in study 
+    :run_burnin => true, 
+    :analyse_burnin => true,
+
     ### Test's bootstrap 
     :run_test_bootstrap => false,
     :analyse_test_bootstrap => false,
@@ -341,6 +345,87 @@ if program[:analyse_bootstrap]
     p = plot(rrr..., legend=false, size=(1200,800), ylims=(0,1));
     savefig(p,"$(program[:out_folder])/simus/featherplot2.pdf")
     savefig(p,"$(program[:out_folder])/simus/featherplot2.png")
+
+    
+end
+if program[:run_burnin]
+    Random.seed!(123)
+    # Sₑ5, Sₑ10, Sₑ15 = ccdf.(TRUE_E, [5YEARS, 10YEARS, 15YEARS])
+    Λ5, Λ10, Λ15 = log.(ccdf.(TRUE_E, [5YEARS, 10YEARS, 15YEARS]))
+    space = collect(Iterators.product(eachindex(cops),eachindex(cops), [250, 500, 1000, 2000, 5000]))
+    models = Vector{Any}(undef,length(space))
+    @showprogress Threads.@threads for ii in eachindex(space)
+        (j,i,k) = space[ii]
+        r = sample_and_estimate(cops[i], cops[j], k, TRUE_E, slopop)
+        models[ii] = (
+            C₀ = i,
+            C₁ = j,
+            n = k,
+            b5  = log(r(5YEARS)) - Λ5,
+            b10 = log(r(10YEARS)) - Λ10,
+            b15 = log(r(15YEARS)) - Λ15,
+            r5 = variance(r,5YEARS),
+            r10 = variance(r,10YEARS),
+            r15 = variance(r,15YEARS),
+        )
+    end
+    models = DataFrame(models)
+    serialize("$(program[:out_folder])/simus/my_serial_burnin.ser",models)
+end
+if program[:analyse_burnin]
+    models = deserialize("$(program[:out_folder])/simus/my_serial_burnin.ser")
+    function mk_burnin_plot(sdf; which_one=:biais, M = 1)
+        i₀       = sdf.C₀[1]
+        i₁       = sdf.C₁[1]
+        is_left    = i₁ == 1
+        is_right   = i₁ == length(cops)
+        is_bottom  = i₀ == length(cops)
+        is_top     = i₀ == 1
+
+        if which_one == :biais
+            p = plot(sdf.n, abs.(sdf.b5), 
+                left_margin             = 5mm,
+                right_margin            = is_right ?  2mm : -2mm,
+                bottom_margin           = is_bottom ?  5mm : -2mm,
+                top_margin              = is_top ?  2mm : -2mm,
+                ylabel                  = is_left ? "C₀: $(unicode_cop_names[i₀])" : "",
+                xlabel                  = is_bottom ? "C: $(unicode_cop_names[i₁])" : "",
+                guidefontsize           = 12,
+                label="t = 5",
+                ylims=(0,M),
+                legend = is_top && is_right ? true : false,
+            )
+            p = plot!(sdf.n, abs.(sdf.b10), label="t = 10)")
+            p = plot!(sdf.n, abs.(sdf.b15), label="t = 15)")
+        elseif which_one == :rmse
+            p = plot(sdf.n, sqrt.(sdf.r5 .+ sdf.b5.^2), 
+                left_margin             = 5mm,
+                right_margin            = is_right ?  2mm : -2mm,
+                bottom_margin           = is_bottom ?  5mm : -2mm,
+                top_margin              = is_top ?  2mm : -2mm,
+                ylabel                  = is_left ? "C₀: $(unicode_cop_names[i₀])" : "",
+                xlabel                  = is_bottom ? "C: $(unicode_cop_names[i₁])" : "",
+                guidefontsize           = 12,
+                label="t = 5",
+                ylims=(0,M),
+                legend = is_top && is_right ? true : false,
+            )
+            p = plot!(sdf.n, sqrt.(sdf.r10 .+ sdf.b10.^2), label="t = 10")
+            p = plot!(sdf.n, sqrt.(sdf.r15 .+ sdf.b15.^2), label="t = 15")
+        end
+        return p
+    end
+    M = max(abs.(models.b5)...,abs.(models.b10)...,abs.(models.b15)...)
+    rrr = [mk_burnin_plot(sdf, which_one=:biais, M=M) for sdf in groupby(models,[:C₀,:C₁])]
+    p2 = plot(rrr..., size=(1200,800));
+    savefig(p2,"$(program[:out_folder])/simus/burnin_biais.pdf")
+    savefig(p2,"$(program[:out_folder])/simus/burnin_biais.png")
+
+    M = max(sqrt.(models.r5 .+ models.b5.^2)...,sqrt.(models.r10 .+ models.b10.^2)...,sqrt.(models.r15 .+ models.b15.^2)...)
+    rrr = [mk_burnin_plot(sdf, which_one=:rmse, M=M) for sdf in groupby(models,[:C₀,:C₁])]
+    p2 = plot(rrr..., legend=false, size=(1200,800));
+    savefig(p2,"$(program[:out_folder])/simus/burnin_rmse.pdf")
+    savefig(p2,"$(program[:out_folder])/simus/burnin_rmse.png")
 end
 #################################################################################################
 ######### Bootstrap the test and extract results
