@@ -1175,9 +1175,9 @@ version = "0.4.18"
 
 [[deps.NetSurvival]]
 deps = ["CSV", "Copulas", "DataFrames", "Distributions", "ForwardDiff", "LinearAlgebra", "RateTables", "Roots", "StatsAPI", "StatsBase", "StatsModels", "SurvivalBase", "Tables"]
-git-tree-sha1 = "df0191f34369a03f1f1197489f6ecbc4766a451c"
-repo-rev = "add_copulas"
-repo-url = "https://github.com/JuliaSurv/NetSurvival.jl.git"
+git-tree-sha1 = "cb9b1aed3ecb45c66fbd0073120480c1d6722636"
+repo-rev = "fix/generalized-inference-performance"
+repo-url = "https://github.com/JuliaSurv/NetSurvival.jl"
 uuid = "8f9d5d0e-dd2e-4568-92d4-f8c5d34f25cf"
 version = "0.1.2"
 

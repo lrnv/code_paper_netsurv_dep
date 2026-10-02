@@ -6,14 +6,14 @@ const PRECISION = 1
 program = Dict(
     
     ### Output folder
-    :out_folder => "assets/",
+    :out_folder => get(ENV, "NETSURV_OUTPUT", joinpath(@__DIR__, "..", "assets")),
 
     ### First graphs on copulas and in appendix. 
-    :plot_copulas => false,
+    :plot_copulas => true,
 
     ### Estimator's bootstrap
-    :run_bootstrap => false,
-    :analyse_bootstrap => false,
+    :run_bootstrap => true,
+    :analyse_bootstrap => true,
     :n => 500, # Size of the samples
     :N_boot => 1000,
 
@@ -22,18 +22,40 @@ program = Dict(
     :analyse_burnin => true,
 
     ### Test's bootstrap 
-    :run_test_bootstrap => false,
-    :analyse_test_bootstrap => false,
+    :run_test_bootstrap => true,
+    :analyse_test_bootstrap => true,
     :N_boot_test => 1000,
 
     ### Example on ccolon/survexp_fr
-    :run_example => false,
-    :analyse_example => false,
-    :run_boot_example_variance => false,
-    :analyse_boot_example_variance => false,
-    :analyse_test_on_example => false,
+    :run_example => true,
+    :analyse_example => true,
+    :run_boot_example_variance => true,
+    :analyse_boot_example_variance => true,
+    :analyse_test_on_example => true,
     :N_boot_example_variance => 200,
 )
+# Number only the enabled stages, in execution order.
+run_stages = filter(stage -> program[first(stage)], [
+    :plot_copulas => "Figures des copules",
+    :run_bootstrap => "Simulations des estimateurs",
+    :analyse_bootstrap => "Analyse des estimateurs et production des figures/tableaux",
+    :run_burnin => "Étude de convergence selon la taille d'échantillon",
+    :analyse_burnin => "Analyse de la convergence et production des figures",
+    :run_test_bootstrap => "Simulations du test (scénarios 1 et 2)",
+    :analyse_test_bootstrap => "Analyse des tests et production des figures/tableaux",
+    :run_example => "Estimation sur les données réelles",
+    :analyse_example => "Figures des estimations sur les données réelles",
+    :run_boot_example_variance => "Bootstrap de la variance sur les données réelles",
+    :analyse_boot_example_variance => "Analyse des variances et production des figures",
+    :analyse_test_on_example => "Tests sur les données réelles et production des tableaux",
+])
+function log_stage(key)
+    index = findfirst(stage -> first(stage) == key, run_stages)
+    @info "Étape $index/$(length(run_stages)): $(last(run_stages[index]))"
+end
+for directory in ("cops", "simus", "simus/test1", "simus/test2", "example")
+    mkpath(joinpath(program[:out_folder], directory))
+end
 #################################################################################################
 ######### Library
 #################################################################################################
@@ -97,6 +119,7 @@ function plot_a_cop(U,title)
     )
 end
 if program[:plot_copulas]
+    log_stage(:plot_copulas)
     p = plot(plot_a_cop.(rand.(cops,5000),unicode_cop_names)...,layout=grid(1,5),size=[1380,304], bottommargin=10Plots.mm )
     savefig(p,"$(program[:out_folder])/cops/showoff_cops.pdf")
     savefig(p,"$(program[:out_folder])/cops/showoff_cops.png")
@@ -115,8 +138,10 @@ function sample_and_estimate(C₀, C₁, n, ℒₑ, rt)
     try
         return fit(GenPoharPerme(C₁), @formula(Surv(t,δ)~1), sampler(n, ℒₑ, C₀), rt)
     catch e
-        @warn "failled: C₀, C₁, n, ℒₑ = $((C₀, C₁, n, ℒₑ))"
-        return sample_and_estimate(C₀, C₁, n, ℒₑ, rt)
+        (e isa DomainError || e isa PosDefException ||
+         (e isa ErrorException && startswith(e.msg, "Implicit update"))) || rethrow()
+
+        return nothing # retain numerical failures; never silently redraw a dataset
     end
 end
 function ci(r,t)
@@ -203,6 +228,7 @@ end
 const TRUE_E = Exponential(10YEARS)
 const EVAL_TIMES = 0:5:(15YEARS)
 if program[:run_bootstrap]
+    log_stage(:run_bootstrap)
     Random.seed!(123)
     Sₑ5, Sₑ10, Sₑ15 = ccdf.(TRUE_E, [5YEARS, 10YEARS, 15YEARS])
     space = collect(Iterators.product(eachindex(cops),eachindex(cops),1:program[:N_boot]))
@@ -213,19 +239,22 @@ if program[:run_bootstrap]
         models[ii] = (
             C₀ = i,
             C₁ = j,
-            S = r.(EVAL_TIMES),
-            biais5  = r(5YEARS) .- Sₑ5,
-            biais10 = r(10YEARS) .- Sₑ10,
-            biais15 = r(15YEARS) .- Sₑ15,
-            is_in5  = contains(ci(r, 5YEARS), Sₑ5),
-            is_in10 = contains(ci(r, 10YEARS), Sₑ10),
-            is_in15 = contains(ci(r, 15YEARS), Sₑ15),
+            failed = isnothing(r),
+            S = isnothing(r) ? fill(NaN, length(EVAL_TIMES)) : r.(EVAL_TIMES),
+            biais5  = isnothing(r) ? NaN : r(5YEARS) .- Sₑ5,
+            biais10 = isnothing(r) ? NaN : r(10YEARS) .- Sₑ10,
+            biais15 = isnothing(r) ? NaN : r(15YEARS) .- Sₑ15,
+            is_in5  = isnothing(r) ? NaN : contains(ci(r, 5YEARS), Sₑ5),
+            is_in10 = isnothing(r) ? NaN : contains(ci(r, 10YEARS), Sₑ10),
+            is_in15 = isnothing(r) ? NaN : contains(ci(r, 15YEARS), Sₑ15),
         )
     end
     models = DataFrame(models)
+    @info "Estimator failures" failures=count(models.failed) total=nrow(models)
     serialize("$(program[:out_folder])/simus/my_serial_models.ser",models)
 end
 if program[:analyse_bootstrap]
+    log_stage(:analyse_bootstrap)
     models = deserialize("$(program[:out_folder])/simus/my_serial_models.ser")
 
     rez_b = combine(groupby(models,["C₀","C₁"]), 
@@ -349,6 +378,7 @@ if program[:analyse_bootstrap]
     
 end
 if program[:run_burnin]
+    log_stage(:run_burnin)
     Random.seed!(123)
     # Sₑ5, Sₑ10, Sₑ15 = ccdf.(TRUE_E, [5YEARS, 10YEARS, 15YEARS])
     Λ5, Λ10, Λ15 = log.(ccdf.(TRUE_E, [5YEARS, 10YEARS, 15YEARS]))
@@ -361,18 +391,21 @@ if program[:run_burnin]
             C₀ = i,
             C₁ = j,
             n = k,
-            b5  = log(r(5YEARS)) - Λ5,
-            b10 = log(r(10YEARS)) - Λ10,
-            b15 = log(r(15YEARS)) - Λ15,
-            r5 = variance(r,5YEARS),
-            r10 = variance(r,10YEARS),
-            r15 = variance(r,15YEARS),
+            failed = isnothing(r),
+            b5  = isnothing(r) ? NaN : log(r(5YEARS)) - Λ5,
+            b10 = isnothing(r) ? NaN : log(r(10YEARS)) - Λ10,
+            b15 = isnothing(r) ? NaN : log(r(15YEARS)) - Λ15,
+            r5 = isnothing(r) ? NaN : variance(r,5YEARS),
+            r10 = isnothing(r) ? NaN : variance(r,10YEARS),
+            r15 = isnothing(r) ? NaN : variance(r,15YEARS),
         )
     end
     models = DataFrame(models)
+    @info "Burn-in failures" failures=count(models.failed) total=nrow(models)
     serialize("$(program[:out_folder])/simus/my_serial_burnin.ser",models)
 end
 if program[:analyse_burnin]
+    log_stage(:analyse_burnin)
     models = deserialize("$(program[:out_folder])/simus/my_serial_burnin.ser")
     function mk_burnin_plot(sdf; which_one=:biais, M = 1)
         i₀       = sdf.C₀[1]
@@ -415,13 +448,14 @@ if program[:analyse_burnin]
         end
         return p
     end
-    M = max(abs.(models.b5)...,abs.(models.b10)...,abs.(models.b15)...)
+    finite_max(values) = maximum(filter(isfinite, values); init=0.01)
+    M = finite_max(vcat(abs.(models.b5), abs.(models.b10), abs.(models.b15)))
     rrr = [mk_burnin_plot(sdf, which_one=:biais, M=M) for sdf in groupby(models,[:C₀,:C₁])]
     p2 = plot(rrr..., size=(1200,800));
     savefig(p2,"$(program[:out_folder])/simus/burnin_biais.pdf")
     savefig(p2,"$(program[:out_folder])/simus/burnin_biais.png")
 
-    M = max(sqrt.(models.r5 .+ models.b5.^2)...,sqrt.(models.r10 .+ models.b10.^2)...,sqrt.(models.r15 .+ models.b15.^2)...)
+    M = finite_max(vcat(sqrt.(models.r5 .+ models.b5.^2), sqrt.(models.r10 .+ models.b10.^2), sqrt.(models.r15 .+ models.b15.^2)))
     rrr = [mk_burnin_plot(sdf, which_one=:rmse, M=M) for sdf in groupby(models,[:C₀,:C₁])]
     p2 = plot(rrr..., legend=false, size=(1200,800));
     savefig(p2,"$(program[:out_folder])/simus/burnin_rmse.pdf")
@@ -441,12 +475,14 @@ function sample_and_test(C₀₁, C₀₂, C₁, n, ℒₑ₁, ℒₑ₂, rt; di
         df.group = [ones(Int64,half_n)...,2*ones(Int64,half_n)...]
         return fit(GraffeoTest(C₁),@formula(Surv(t,δ)~group), df, rt)
     catch e
-        @show e
-        @warn "failled: C₀₁, C₀₂, C₁, n, ℒₑ₁, ℒₑ₂ = $((C₀₁, C₀₂, C₁, n, ℒₑ₁, ℒₑ₂,))"
-        return sample_and_test(C₀₁, C₀₂, C₁, n, ℒₑ₁, ℒₑ₂, rt)
+        (e isa DomainError || e isa PosDefException ||
+         (e isa ErrorException && startswith(e.msg, "Implicit update"))) || rethrow()
+
+        return nothing # failed draws must not disappear from calibration summaries
     end
 end
 if program[:run_test_bootstrap]
+    log_stage(:run_test_bootstrap)
     Random.seed!(123)
     eachindex(cops)
     E1 = Exponential(5YEARS)
@@ -468,12 +504,14 @@ if program[:run_test_bootstrap]
             C₀ = i,
             C₁ = j,
             v = version,
-            p5 = pvalue(r, 5YEARS),
-            p10 = pvalue(r, 10YEARS),
-            p15 = pvalue(r, 15YEARS),
+            failed = isnothing(r),
+            p5 = isnothing(r) ? NaN : pvalue(r, 5YEARS),
+            p10 = isnothing(r) ? NaN : pvalue(r, 10YEARS),
+            p15 = isnothing(r) ? NaN : pvalue(r, 15YEARS),
         )
     end
     tests = DataFrame(tests)
+    @info "Test failures" failures=count(tests.failed) total=nrow(tests)
     serialize("$(program[:out_folder])/simus/my_serial_tests.ser",tests)
 end
 function mktble(tests, sym)
@@ -514,6 +552,7 @@ function mkhisto15(sdf)
     )
 end
 if program[:analyse_test_bootstrap]
+    log_stage(:analyse_test_bootstrap)
     all_tests = deserialize("$(program[:out_folder])/simus/my_serial_tests.ser")
     two_boostraps = (
         (
@@ -539,9 +578,9 @@ if program[:analyse_test_bootstrap]
         
         tests.C₁ = [working_names[i] for i in tests.C₁]
         tests.C₀ = [working_names[i] for i in tests.C₀]
-        tests.reject5 = tests.p5 .< 0.05
-        tests.reject10 = tests.p10 .< 0.05
-        tests.reject15 = tests.p15 .< 0.05
+        tests.reject5 = ifelse.(isfinite.(tests.p5), tests.p5 .< 0.05, NaN)
+        tests.reject10 = ifelse.(isfinite.(tests.p10), tests.p10 .< 0.05, NaN)
+        tests.reject15 = ifelse.(isfinite.(tests.p15), tests.p15 .< 0.05, NaN)
 
         tst5 = mktble(tests, :reject5)
         tst10 = mktble(tests, :reject10)
@@ -598,6 +637,7 @@ df_left = select(filter(:side => ==(:left), df), Not(:side))
 T_FINAL = 10
 
 if program[:run_example]
+    log_stage(:run_example)
     models = Dict()
     @showprogress Threads.@threads for (τ,(df,side)) in collect(Iterators.product(τ_frank,((df_left, :left),(df_right, :right))))
             models[(side,:frank,τ)] = fit(GenPoharPerme(frank(τ)), @formula(Surv(time,status)~1), df, survexp_fr)
@@ -608,6 +648,7 @@ if program[:run_example]
     serialize("$(program[:out_folder])/example/models.ser", models)
 end
 if program[:analyse_example]
+    log_stage(:analyse_example)
     models = deserialize("$(program[:out_folder])/example/models.ser")
 
     function mkshortplot(models, side, cop, τs)
@@ -652,6 +693,7 @@ eval_times = 1:1:10YEARS
 cl_cops = clay.(τ_clayton)
 J, K, L = length(eval_times), length(cl_cops), nrow(df_left)
 if program[:run_boot_example_variance]
+    log_stage(:run_boot_example_variance)
     # Bootstrap to get unbiaised estimators of the standard errors: 
     boot, b = zeros(N,K,J), rand(1:L,(N,L))
     ProgressMeter.@showprogress Threads.@threads for (i,k) in collect(Iterators.product(1:N,1:K))
@@ -660,6 +702,7 @@ if program[:run_boot_example_variance]
     serialize("$(program[:out_folder])/example/boot.ser",boot)
 end
 if program[:analyse_boot_example_variance]
+    log_stage(:analyse_boot_example_variance)
     Random.seed!(123)
 
     # Get estimated standard errors:  
@@ -692,6 +735,7 @@ if program[:analyse_boot_example_variance]
     Plots.savefig(plt,"$(program[:out_folder])/example/bootstrap_variance.png")
 end
 if program[:analyse_test_on_example]
+    log_stage(:analyse_test_on_example)
     mk_example_test(df, tbl, cop) = fit(GraffeoTest(cop), @formula(Surv(time,status)~side), df, tbl)
     Ts = [2,3,5,8,10] .* YEARS
     times = ["T = $(Int(i/YEARS))" for i in Ts]
@@ -710,3 +754,5 @@ if program[:analyse_test_on_example]
     insertcols!(frank_pvals, 1, :τ => τ_frank)
     save_table(frank_pvals, "$(program[:out_folder])/example/tests_pvalues_frank.tex"; rounding=ft_printf("%.5f"), alignment = [:r,:Y,:Y,:Y,:Y,:Y])
 end
+
+@info "Run terminé ($(length(run_stages)) étapes)."
