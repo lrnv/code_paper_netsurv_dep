@@ -9,27 +9,27 @@ program = Dict(
     :out_folder => get(ENV, "NETSURV_OUTPUT", joinpath(@__DIR__, "..", "assets")),
 
     ### First graphs on copulas and in appendix. 
-    :plot_copulas => true,
+    :plot_copulas => false,
 
     ### Estimator's bootstrap
-    :run_bootstrap => true,
+    :run_bootstrap => false,
     :analyse_bootstrap => true,
     :n => 500, # Size of the samples
     :N_boot => 1000,
 
     ## Burn in study 
-    :run_burnin => true, 
+    :run_burnin => false, 
     :analyse_burnin => true,
 
     ### Test's bootstrap 
-    :run_test_bootstrap => true,
+    :run_test_bootstrap => false,
     :analyse_test_bootstrap => true,
     :N_boot_test => 1000,
 
     ### Example on ccolon/survexp_fr
-    :run_example => true,
+    :run_example => false,
     :analyse_example => true,
-    :run_boot_example_variance => true,
+    :run_boot_example_variance => false,
     :analyse_boot_example_variance => true,
     :analyse_test_on_example => true,
     :N_boot_example_variance => 200,
@@ -256,6 +256,7 @@ end
 if program[:analyse_bootstrap]
     log_stage(:analyse_bootstrap)
     models = deserialize("$(program[:out_folder])/simus/my_serial_models.ser")
+    true_curve = ccdf.(TRUE_E, EVAL_TIMES)
 
     rez_b = combine(groupby(models,["C₀","C₁"]), 
         :biais5 => mean => :b₅,
@@ -327,17 +328,20 @@ if program[:analyse_bootstrap]
         is_right   = i₁ == length(cops)
         is_bottom  = i₀ == length(cops)
         is_top     = i₀ == 1
-        true_curve = ccdf.(TRUE_E,EVAL_TIMES)
-
         if recenter
             p = errorline(
                 EVAL_TIMES/YEARS, 
                 hcat(sdf.S...) ./ true_curve, 
                 errorstyle              =:plume, 
+                xlims                   =(0,15),
                 left_margin             = 5mm,
                 right_margin            = is_right ?  2mm : -2mm,
                 bottom_margin           = is_bottom ?  5mm : -2mm,
                 top_margin              = is_top ?  2mm : -2mm,
+                ytickfontsize           = 6,
+                y_foreground_color_text = :black,
+                xtickfontsize           = is_bottom ? 6 : 1,
+                x_foreground_color_text = is_bottom ? :black : :transparent,
                 ylabel                  = is_left ? "C₀: $(unicode_cop_names[i₀])" : "",
                 xlabel                  = is_bottom ? "C: $(unicode_cop_names[i₁])" : "",
                 guidefontsize           = 12,
@@ -371,7 +375,7 @@ if program[:analyse_bootstrap]
     savefig(p2,"$(program[:out_folder])/simus/featherplot.png")
 
     rrr = [mkplot(sdf) for sdf in groupby(models,[:C₀,:C₁])]
-    p = plot(rrr..., legend=false, size=(1200,800), ylims=(0,1));
+    p = plot(rrr..., legend=false, size=(1200,800), xlims=(0,15), ylims=(0,1));
     savefig(p,"$(program[:out_folder])/simus/featherplot2.pdf")
     savefig(p,"$(program[:out_folder])/simus/featherplot2.png")
 
@@ -417,10 +421,15 @@ if program[:analyse_burnin]
 
         if which_one == :biais
             p = plot(sdf.n, abs.(sdf.b5), 
+                xlims=(250,5000),
                 left_margin             = 5mm,
                 right_margin            = is_right ?  2mm : -2mm,
                 bottom_margin           = is_bottom ?  5mm : -2mm,
                 top_margin              = is_top ?  2mm : -2mm,
+                ytickfontsize           = is_left ? 6 : 1,
+                y_foreground_color_text = is_left ? :black : :transparent,
+                xtickfontsize           = is_bottom ? 6 : 1,
+                x_foreground_color_text = is_bottom ? :black : :transparent,
                 ylabel                  = is_left ? "C₀: $(unicode_cop_names[i₀])" : "",
                 xlabel                  = is_bottom ? "C: $(unicode_cop_names[i₁])" : "",
                 guidefontsize           = 12,
@@ -428,14 +437,19 @@ if program[:analyse_burnin]
                 ylims=(0,M),
                 legend = is_top && is_right ? true : false,
             )
-            p = plot!(sdf.n, abs.(sdf.b10), label="t = 10)")
-            p = plot!(sdf.n, abs.(sdf.b15), label="t = 15)")
+            p = plot!(sdf.n, abs.(sdf.b10), label="t = 10")
+            p = plot!(sdf.n, abs.(sdf.b15), label="t = 15")
         elseif which_one == :rmse
             p = plot(sdf.n, sqrt.(sdf.r5 .+ sdf.b5.^2), 
+                xlims=(250,5000),
                 left_margin             = 5mm,
                 right_margin            = is_right ?  2mm : -2mm,
                 bottom_margin           = is_bottom ?  5mm : -2mm,
                 top_margin              = is_top ?  2mm : -2mm,
+                ytickfontsize           = is_left ? 6 : 1,
+                y_foreground_color_text = is_left ? :black : :transparent,
+                xtickfontsize           = is_bottom ? 6 : 1,
+                x_foreground_color_text = is_bottom ? :black : :transparent,
                 ylabel                  = is_left ? "C₀: $(unicode_cop_names[i₀])" : "",
                 xlabel                  = is_bottom ? "C: $(unicode_cop_names[i₁])" : "",
                 guidefontsize           = 12,
@@ -527,7 +541,7 @@ function mktble(tests, sym)
         :reject_counts
     )
 end
-function mkhisto15(sdf)
+function mkhisto15(sdf, bins)
         
     pvals = sdf.p15
     ok = .! isnan.(pvals)
@@ -540,10 +554,15 @@ function mkhisto15(sdf)
     is_top     = i₀ == 1
 
     return plot(
-        histogram(pvals[ok], bins=50,normalize=:pdf),
-        # ylims=(0,0.08),
+        histogram(pvals[ok], bins=bins, normalize=:pdf),
+        xlims=(0,1),
+        xticks=0:0.2:1,
         ylabel = is_left ? "C₀: $(unicode_cop_names[i₀])" : "",
         xlabel = is_bottom ? "C: $(unicode_cop_names[i₁])" : "",
+        ytickfontsize = 6,
+        y_foreground_color_text = :black,
+        xtickfontsize = is_bottom ? 6 : 1,
+        x_foreground_color_text = is_bottom ? :black : :transparent,
         guidefontsize  = 12,
         bottom_margin  = is_bottom ?  5mm : -2mm,
         top_margin = is_top ?  2mm : -2mm,
@@ -554,6 +573,7 @@ end
 if program[:analyse_test_bootstrap]
     log_stage(:analyse_test_bootstrap)
     all_tests = deserialize("$(program[:out_folder])/simus/my_serial_tests.ser")
+    histo_bins = collect(range(0, 1; length=51))
     two_boostraps = (
         (
             "$(program[:out_folder])/simus/test1",
@@ -569,7 +589,7 @@ if program[:analyse_test_bootstrap]
 
     for (folder, tests) in two_boostraps
         p = plot(
-            [mkhisto15(sdf) for sdf in groupby(filter(:H => x-> x == "H₀", tests), [:C₀,:C₁])]..., 
+            [mkhisto15(sdf, histo_bins) for sdf in groupby(filter(:H => x-> x == "H₀", tests), [:C₀,:C₁])]..., 
             legend=false, 
             size=(1200,800)
         )
